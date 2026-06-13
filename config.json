@@ -1,0 +1,19 @@
+{
+  "tally_url": "http://127.0.0.1:9000",
+  "selected_company": "",
+  "tally_timeout_ms": 15000,
+  "app_theme": "Blue theme - classic",
+  "purchase_voucher_type": "Sathi Purchase",
+  "sales_voucher_type": "Sathi Sales",
+  "purchase_ledger": "Sathi Purchase A/c",
+  "party_ledger_from": "",
+  "godown": "",
+  "base_url": "https://seedtrace.gov.in/inv-apis2/billing",
+  "api_key": "",
+  "client_id": "",
+  "client_secret": "",
+  "owner_code": "",
+  "location_code": "",
+  "state_code": "27",
+  "port": 5000
+}
