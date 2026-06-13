@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sathi-Connect — Integration Control Room</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- ══════════════ HEADER ══════════════ -->
+<div id="header">
+  <div class="header-logo">
+    <div class="logo-badge">SC</div>
+    <div class="logo-text">
+      <div class="logo-title">Sathi-Connect</div>
+      <div class="logo-sub">SATHI + TALLY</div>
+    </div>
+  </div>
+  <span class="header-breadcrumb">Integration Control Room&nbsp;&nbsp;/&nbsp;&nbsp;</span>
+  <span id="page-title">Dashboard</span>
+  <button id="refresh-btn">Refresh</button>
+</div>
+
+<!-- ══════════════ LAYOUT ══════════════ -->
+<div id="layout">
+
+  <!-- ══ SIDEBAR ══ -->
+  <nav id="sidebar">
+    <div class="sidebar-label">Operator Language</div>
+    <div style="padding:4px 14px 10px;font-size:12px;color:var(--subtext)">English</div>
+
+    <div class="nav-item active" data-page="dashboard"   onclick="navigate('dashboard')">
+      <span class="nav-key">D</span> Dashboard
+    </div>
+    <div class="nav-item" data-page="sathi_tally"  onclick="navigate('sathi_tally')">
+      <span class="nav-key">S</span> SATHI to Tally
+    </div>
+    <div class="nav-item" data-page="tally_sathi"  onclick="navigate('tally_sathi')">
+      <span class="nav-key">T</span> Tally to SATHI
+    </div>
+    <div class="nav-item" data-page="reports"      onclick="navigate('reports')">
+      <span class="nav-key">R</span> Reports
+    </div>
+    <div class="nav-item" data-page="item_mapping" onclick="navigate('item_mapping')">
+      <span class="nav-key">L</span> Item Mapping
+    </div>
+    <div class="nav-item" data-page="settings"     onclick="navigate('settings')">
+      <span class="nav-key">C</span> Settings
+    </div>
+    <div class="nav-item" data-page="tally_setup"  onclick="navigate('tally_setup')">
+      <span class="nav-key">U</span> Tally Setup
+    </div>
+    <div class="nav-item" data-page="license"      onclick="navigate('license')">
+      <span class="nav-key">K</span> License
+    </div>
+    <div class="nav-item" data-page="issues"       onclick="navigate('issues')">
+      <span class="nav-key">E</span> Issues
+    </div>
+
+    <div class="sidebar-footer">
+      <b>DEVELOPED BY</b>
+      Degitalservice<br>
+      <b style="margin-top:6px;display:block">IN ASSOCIATION WITH</b>
+      SATHI Portal<br>DA&FW
+    </div>
+  </nav>
+
+  <!-- ══ MAIN CONTENT ══ -->
+  <main id="main">
+
+    <!-- ─── PAGE: Dashboard ─── -->
+    <div id="page-dashboard" class="page">
+      <div class="stat-grid">
+        <div class="stat-card green" id="stat-sathi">
+          <div class="stat-label">SATHI API</div>
+          <div class="stat-value" id="stat-sathi-val">Checking...</div>
+          <div class="stat-sub"  id="stat-sathi-sub">Connecting to portal</div>
+        </div>
+        <div class="stat-card blue" id="stat-tally">
+          <div class="stat-label">TALLY</div>
+          <div class="stat-value" id="stat-tally-val">Checking...</div>
+          <div class="stat-sub"  id="stat-tally-sub">Connecting to Tally</div>
+        </div>
+        <div class="stat-card black">
+          <div class="stat-label">ORDERS</div>
+          <div class="stat-value" id="stat-orders">—</div>
+          <div class="stat-sub">Ready for mapping and Tally push</div>
+        </div>
+        <div class="stat-card orange">
+          <div class="stat-label">OPEN ERRORS</div>
+          <div class="stat-value" id="stat-errors">0</div>
+          <div class="stat-sub">Support-ready issue log</div>
+        </div>
+      </div>
+
+      <div class="workflow-grid">
+        <div class="workflow-card">
+          <div class="workflow-type">SATHI TO TALLY</div>
+          <div class="workflow-title">Fetch lot and create purchase voucher</div>
+          <div class="workflow-desc">Use this for portal inward data.</div>
+          <button class="btn btn-primary" onclick="navigate('sathi_tally')">Start &nbsp;›</button>
+        </div>
+        <div class="workflow-card">
+          <div class="workflow-type">TALLY TO SATHI</div>
+          <div class="workflow-title">Create SATHI order from sales bill</div>
+          <div class="workflow-desc">Use this after sales bill is ready in Tally.</div>
+          <button class="btn btn-primary" onclick="navigate('tally_sathi')">Start &nbsp;›</button>
+        </div>
+      </div>
+
+      <div class="sathi-request-card">
+        <div class="info">
+          <div class="title">SATHI Request</div>
+          <div class="desc">Select the work and run the request.</div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-outlined" onclick="navigate('sathi_tally')">Request panel</button>
+          <button class="btn btn-primary"  onclick="navigate('sathi_tally')">Run Action</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: SATHI to Tally ─── -->
+    <div id="page-sathi_tally" class="page hidden">
+      <div class="card">
+        <div class="card-title">Create Tally Bills</div>
+        <div class="card-desc">SATHI lots ready for Tally purchase entry appear here.</div>
+
+        <div class="action-bar">
+          <button class="btn btn-ghost"   onclick="clearOrders()">Clear</button>
+          <button class="btn btn-outlined" onclick="reviewMapping()">Review Mapping</button>
+          <button class="btn btn-ghost"   onclick="checkTallyStatus()">Check Tally Status</button>
+          <div class="spacer"></div>
+          <button class="btn btn-primary" onclick="bulkPushToTally()">Bulk Push to Tally</button>
+          <button class="btn btn-primary" id="btn-fetch-orders" data-label="Fetch Orders" onclick="fetchOrders()">Fetch Orders</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Voucher Number</th>
+                <th>Party</th>
+                <th>Amount</th>
+                <th>Item Mapping</th>
+                <th>Tally</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="orders-table-body">
+              <tr class="empty-row"><td colspan="6">Click "Fetch Orders" to load SATHI orders.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: Tally to SATHI ─── -->
+    <div id="page-tally_sathi" class="page hidden">
+      <div class="card">
+        <div class="card-title">Send Tally Bills to SATHI</div>
+        <div class="card-desc">Tally sales bills ready for SATHI order creation appear here.</div>
+
+        <div class="date-row">
+          <label>FROM</label>
+          <input type="date" id="sales-from">
+          <label>TO</label>
+          <input type="date" id="sales-to">
+          <button class="btn btn-primary" onclick="fetchSalesEntries()">Fetch Sales Entries</button>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Sales Voucher Type</label>
+            <input type="text" id="ts-voucher-type" value="Sathi Sales" readonly>
+          </div>
+          <div class="form-group">
+            <label>Buyer Licence</label>
+            <input type="text" id="ts-buyer-licence" value="From party master" readonly>
+          </div>
+          <div class="form-group">
+            <label>Original Owner Source</label>
+            <input type="text" id="ts-owner-source" value="Lot trace / batch history" readonly>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Voucher Number</th><th>Party</th><th>Amount</th>
+                <th>Buyer Licence</th><th>Type</th><th>Lot Trace</th><th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="sales-table-body">
+              <tr class="empty-row"><td colspan="7">No Tally sales entries fetched yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card mt-16">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="card-title">Selected voucher details</div>
+            <div class="card-desc" style="margin:0">Open only if SATHI asks for correction before sending.</div>
+          </div>
+          <button class="btn btn-outlined btn-sm">Manual edit</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: Reports ─── -->
+    <div id="page-reports" class="page hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+          <div>
+            <div class="card-title">Reports</div>
+            <div class="card-desc" style="margin:0">Separate reporting area. Push Queue and Portal Push logic stays untouched.</div>
+          </div>
+          <div class="date-row" style="margin:0">
+            <label>FROM</label>
+            <input type="date" id="rep-from">
+            <label>TO</label>
+            <input type="date" id="rep-to">
+            <button class="btn btn-primary" onclick="refreshReport()">Refresh Report</button>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-chip">
+            <div class="num" id="rep-received">0</div>
+            <div class="lbl">Received from SATHI</div>
+          </div>
+          <div class="stat-chip">
+            <div class="num" id="rep-sent">0</div>
+            <div class="lbl">Sent to SATHI</div>
+          </div>
+          <div class="stat-chip">
+            <div class="num" id="rep-licence">—</div>
+            <div class="lbl">Active Licence</div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Voucher</th><th>Party</th><th>Items / Lots</th><th>Buyer Licence</th><th>Amount</th><th>SATHI</th></tr>
+            </thead>
+            <tbody id="report-table-body">
+              <tr class="empty-row"><td colspan="6">No sales report rows loaded.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card mt-16">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="card-title">Extra Tools We Can Add</div>
+            <div class="card-desc" style="margin:0">These are separate add-ons from the Swagger billing APIs. We can activate them one by one.</div>
+          </div>
+          <button class="btn btn-outlined btn-sm">Show tools</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: Item Mapping ─── -->
+    <div id="page-item_mapping" class="page hidden">
+      <div class="card">
+        <div class="card-title">Item Mapping</div>
+        <div class="card-desc">Map SATHI portal items (varieties/crops) to their corresponding Tally item names.</div>
+        <div style="text-align:center;padding:40px;color:var(--subtext)">
+          <div style="font-size:32px;margin-bottom:10px">🗺️</div>
+          <div>Fetch orders from SATHI to Tally page first, then item mapping will appear here.</div>
+          <button class="btn btn-primary mt-12" onclick="navigate('sathi_tally')">Go to SATHI to Tally</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: Settings ─── -->
+    <div id="page-settings" class="page hidden">
+
+      <!-- Top config row -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="form-row" style="align-items:flex-end">
+          <div class="form-group">
+            <label>Tally URL</label>
+            <input type="text" id="s-tally-url" placeholder="http://127.0.0.1:9000">
+          </div>
+          <div class="form-group">
+            <label>Selected Company</label>
+            <input type="text" id="s-company" placeholder="Company name">
+          </div>
+          <div class="form-group">
+            <label>Company List from Tally</label>
+            <select id="s-company-list"><option>Loading...</option></select>
+          </div>
+          <div class="form-group" style="max-width:140px">
+            <label>Tally Timeout MS</label>
+            <input type="number" id="s-timeout" value="15000">
+          </div>
+        </div>
+
+        <div class="section-title mt-12">Application Look</div>
+        <div class="form-row">
+          <div class="form-group" style="max-width:300px">
+            <label>App Theme</label>
+            <select id="s-theme">
+              <option>Blue theme - classic</option>
+              <option>Dark theme</option>
+              <option>Green theme</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+          <span class="config-note">Configuration is stored locally in config.json</span>
+          <button class="btn btn-primary" onclick="saveSettings()">Save Configuration</button>
+        </div>
+      </div>
+
+      <!-- Two column cards -->
+      <div class="two-col">
+        <!-- Tally Settings -->
+        <div class="card">
+          <div class="card-title">Tally Settings</div>
+          <div class="card-desc">Keep company selection ready for voucher creation and sync.</div>
+
+          <div class="section-title">Voucher Defaults</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Purchase Voucher Type</label>
+              <input type="text" id="s-purch-voucher" placeholder="Sathi Purchase">
+            </div>
+            <div class="form-group">
+              <label>Sales Voucher Type for Portal Push</label>
+              <input type="text" id="s-sales-voucher" placeholder="Sathi Sales">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Purchase Ledger</label>
+              <input type="text" id="s-purch-ledger" placeholder="Sathi Purchase A/c">
+            </div>
+          </div>
+
+          <div class="section-title mt-12">Ledger Mapping</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Party Ledger From</label>
+              <input type="text" id="s-party-ledger" placeholder="">
+            </div>
+            <div class="form-group">
+              <label>Godown</label>
+              <input type="text" id="s-godown" placeholder="">
+            </div>
+          </div>
+        </div>
+
+        <!-- SATHI Settings -->
+        <div class="card">
+          <div class="card-title">SATHI Settings</div>
+          <div class="card-desc">These SATHI values are saved against the selected Tally company.</div>
+
+          <div class="section-title">Portal Access</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Base URL</label>
+              <input type="text" id="s-base-url" placeholder="https://seedtrace.gov.in/inv-apis2/billing">
+            </div>
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="s-api-key" placeholder="Leave blank to keep existing">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Client ID</label>
+              <input type="text" id="s-client-id" placeholder="Dealer licence number">
+            </div>
+            <div class="form-group">
+              <label>Client Secret</label>
+              <input type="password" id="s-client-secret" placeholder="Leave blank to keep existing">
+            </div>
+          </div>
+
+          <div class="section-title mt-12">Billing Identity</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Owner Code</label>
+              <input type="text" id="s-owner-code" placeholder="e.g. LCCD2021120006">
+            </div>
+            <div class="form-group">
+              <label>Location Code</label>
+              <input type="text" id="s-location-code" placeholder="e.g. LCCD2021120006">
+            </div>
+            <div class="form-group" style="max-width:120px">
+              <label>State Code</label>
+              <input type="text" id="s-state-code" placeholder="27">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: Tally Setup ─── -->
+    <div id="page-tally_setup" class="page hidden">
+      <div class="card">
+        <div class="card-title">Tally Setup</div>
+        <div class="card-desc">Configure Tally Prime for integration with Sathi-Connect.</div>
+
+        <div class="section-title">Step 1 — Enable Tally XML Server</div>
+        <ol style="padding-left:20px;line-height:2;color:var(--subtext);font-size:13px">
+          <li>Open Tally Prime</li>
+          <li>Press <strong>F12</strong> → <strong>Product &amp; Features</strong></li>
+          <li>Select <strong>TDL Management</strong></li>
+          <li>Set <em>Load TDL files on Startup</em> = <strong>YES</strong></li>
+          <li>Accept and Restart Tally Prime</li>
+        </ol>
+
+        <div class="section-title mt-16">Step 2 — Download &amp; Load TDL File</div>
+        <p style="color:var(--subtext);margin-bottom:14px;font-size:13px">Download the TDL file generated with your current configuration and load it into Tally Prime.</p>
+        <button class="btn btn-primary" onclick="downloadTDL()">📥 Download TDL File</button>
+
+        <div class="section-title mt-16">Step 3 — Test Connection</div>
+        <p style="color:var(--subtext);margin-bottom:14px;font-size:13px">Verify that Sathi-Connect can reach Tally Prime on the configured URL.</p>
+        <button class="btn btn-outlined" onclick="testTally()">Test Tally Connection</button>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: License ─── -->
+    <div id="page-license" class="page hidden">
+      <div class="card">
+        <div class="card-title">License Information</div>
+        <div class="card-desc">Your SATHI portal access details.</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>License Status</label>
+            <input type="text" value="Active" readonly style="color:var(--green);font-weight:700">
+          </div>
+          <div class="form-group">
+            <label>Client ID (Licence)</label>
+            <input type="text" id="lic-client-id" readonly>
+          </div>
+          <div class="form-group">
+            <label>Owner Code</label>
+            <input type="text" id="lic-owner" readonly>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>SATHI Base URL</label>
+            <input type="text" id="lic-base-url" readonly>
+          </div>
+        </div>
+        <div class="mt-16" style="color:var(--subtext);font-size:12px">
+          To update your license credentials, go to <a href="#" onclick="navigate('settings')" style="color:var(--blue)">Settings → SATHI Settings</a>.
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: Issues ─── -->
+    <div id="page-issues" class="page hidden">
+      <div class="card">
+        <div class="card-title">Issues &amp; Error Log</div>
+        <div class="card-desc">API errors and connectivity issues are logged here for troubleshooting.</div>
+
+        <table>
+          <thead><tr><th>Time</th><th>Type</th><th>Message</th><th>Status Code</th></tr></thead>
+          <tbody>
+            <tr class="empty-row"><td colspan="4">No issues logged. Everything looks good! ✅</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card mt-16">
+        <div class="card-title">Common Fixes</div>
+        <div style="line-height:2;font-size:13px;color:var(--subtext)">
+          <div><strong style="color:var(--text)">Dealer ID / Secret Key Not Matched</strong> — Unauthorized system. Check Settings → SATHI Settings.</div>
+          <div><strong style="color:var(--text)">Data not received</strong> — Retry the process or check internet connectivity.</div>
+          <div><strong style="color:var(--text)">Data not found in valid format</strong> — Integration service may not be running.</div>
+          <div><strong style="color:var(--text)">Permission denied</strong> — Ensure security access rights with SATHI admin.</div>
+          <div><strong style="color:var(--text)">Tally not connected</strong> — Start Tally Prime and enable XML server.</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ══ RIGHT PANEL ══ -->
+  <aside id="right-panel">
+    <div class="rp-section">
+      <div class="rp-label">License Status</div>
+      <div class="rp-status-active">Active</div>
+      <div style="font-size:11px;color:var(--subtext)">Valid until 2027-05-19</div>
+    </div>
+
+    <div class="rp-section">
+      <div class="rp-label">Company</div>
+      <div class="rp-value" id="rp-company">—</div>
+    </div>
+
+    <div class="rp-section">
+      <div class="rp-label">Licence</div>
+      <div class="rp-value" id="rp-licence" style="font-size:11px;font-family:monospace">—</div>
+    </div>
+
+    <div class="rp-section">
+      <div class="rp-label">Tally SNO</div>
+      <div class="rp-value" id="rp-tally-sno">—</div>
+    </div>
+
+    <div class="rp-section">
+      <div class="rp-label">Voucher Types</div>
+      <div class="rp-value" style="font-size:11px">Sathi Purchase → Sathi Sales</div>
+    </div>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
+
+    <div class="rp-card">
+      <div class="rp-card-title" id="rp-company2">—</div>
+      <div class="rp-card-url"   id="rp-tally-url">—</div>
+      <div style="font-size:11px;color:var(--subtext);margin-bottom:4px">Active Licence</div>
+      <select class="rp-select" style="font-family:monospace;font-size:11px">
+        <option id="rp-licence2">—</option>
+      </select>
+      <div class="rp-desc">Sathi Purchase → Sathi Sales<br>Tally connection is ready.</div>
+      <button class="btn-test" onclick="testTally()">Test Tally</button>
+    </div>
+
+    <div style="margin-top:14px;font-size:11px;color:var(--subtext)">
+      <div>Owner Code: <span id="rp-owner" style="font-weight:500">—</span></div>
+    </div>
+  </aside>
+
+</div><!-- /layout -->
+
+<!-- ── TOAST ── -->
+<div id="toast"></div>
+
+<script src="/static/app.js"></script>
+<script>
+  // Sync right panel extras
+  function updateRightPanelExtra() {
+    setEl('rp-company2',  cfg.selected_company || '—');
+    document.getElementById('rp-licence2').textContent = cfg.client_id || '—';
+    setEl('rp-tally-sno', cfg.tally_sno || '—');
+    // License page
+    setVal('lic-client-id', cfg.client_id  || '');
+    setVal('lic-owner',     cfg.owner_code || '');
+    setVal('lic-base-url',  cfg.base_url   || '');
+  }
+
+  // Override loadConfig to also update extra
+  const _origLoad = loadConfig;
+  async function loadConfig() {
+    cfg = await api('/api/config');
+    updateRightPanel();
+    updateRightPanelExtra();
+  }
+
+  function checkTallyStatus() { testTally(); }
+  function clearOrders() {
+    fetchedOrders = [];
+    setEl('orders-table-body','<tr class="empty-row"><td colspan="6">Orders cleared.</td></tr>');
+    setEl('stat-orders','—');
+  }
+</script>
+</body>
+</html>
