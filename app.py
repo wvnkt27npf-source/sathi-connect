@@ -2,14 +2,14 @@ import os, json, hashlib, hmac, time, threading, webbrowser
 from flask import Flask, render_template, request, jsonify, Response
 import requests as req
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
+# -- Paths -------------------------------------------------------------------
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 SATHI_BASE  = "https://seedtrace.gov.in/inv-apis2/billing"
 
 app = Flask(__name__)
 
-# ── CORS for web access ────────────────────────────────────────────────────────
+# -- CORS for web access -----------------------------------------------------
 @app.after_request
 def add_cors(resp):
     resp.headers['Access-Control-Allow-Origin'] = '*'
@@ -17,10 +17,9 @@ def add_cors(resp):
     resp.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
     return resp
 
-# ── Config Helpers ─────────────────────────────────────────────────────────────
+# -- Config Helpers ----------------------------------------------------------
 def load_cfg():
     """Load config: env vars take priority (Railway), fallback to config.json (local)"""
-    # On Railway, use environment variables
     env_cfg = {
         "tally_url":              os.environ.get("TALLY_URL", ""),
         "selected_company":       os.environ.get("SELECTED_COMPANY", ""),
@@ -40,32 +39,30 @@ def load_cfg():
         "state_code":             os.environ.get("STATE_CODE", "27"),
         "port":                   int(os.environ.get("PORT", 5000)),
     }
-    # Merge with config.json (local dev) — env vars override file values
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             file_cfg = json.load(f)
-        # Only use file values if env var is empty
         for k, v in file_cfg.items():
-            if not env_cfg.get(k):  # env var not set → use file
+            if not env_cfg.get(k):
                 env_cfg[k] = v
     except Exception:
         pass
     return env_cfg
 
-def save_cfg(data: dict):
+def save_cfg(data):
     existing = load_cfg()
     existing.update(data)
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(existing, f, indent=2)
 
-# ── SATHI Security ─────────────────────────────────────────────────────────────
-def key_hash(api_key: str, ts: str) -> str:
+# -- SATHI Security ----------------------------------------------------------
+def key_hash(api_key, ts):
     return hashlib.sha512((api_key + ts).encode()).hexdigest()
 
-def signature(api_key: str, body: str) -> str:
+def signature(api_key, body):
     return hmac.new(api_key.encode(), body.encode(), hashlib.sha512).hexdigest()
 
-def call_sathi(endpoint: str, body: dict):
+def call_sathi(endpoint, body):
     cfg     = load_cfg()
     api_key = cfg.get("api_key", "")
     cid     = cfg.get("client_id", "")
@@ -74,7 +71,7 @@ def call_sathi(endpoint: str, body: dict):
 
     if not all([api_key, cid, csec]):
         return {"statusCode": 400, "status": "Error",
-                "message": "Missing credentials in config.json. Go to Settings page."}
+                "message": "Missing credentials. Go to Settings page."}
 
     ts = str(int(time.time() * 1000))
     body["ts"]      = int(ts)
@@ -95,16 +92,16 @@ def call_sathi(endpoint: str, body: dict):
             return r.json()
         except req.exceptions.Timeout:
             if attempt == 1:
-                return {"statusCode": 504, "status": "Error", "message": "SATHI API timeout after retry."}
+                return {"statusCode": 504, "status": "Error", "message": "SATHI API timeout."}
         except req.exceptions.ConnectionError:
-            return {"statusCode": 503, "status": "Error", "message": "Cannot reach SATHI Portal. Check internet."}
+            return {"statusCode": 503, "status": "Error", "message": "Cannot reach SATHI Portal."}
         except Exception as e:
             return {"statusCode": 500, "status": "Error", "message": str(e)}
 
-# ── Tally XML Helper ────────────────────────────────────────────────────────────
-def call_tally(xml: str):
-    cfg = load_cfg()
-    url = cfg.get("tally_url", "http://127.0.0.1:9000")
+# -- Tally XML Helper --------------------------------------------------------
+def call_tally(xml):
+    cfg     = load_cfg()
+    url     = cfg.get("tally_url", "http://127.0.0.1:9000")
     timeout = int(cfg.get("tally_timeout_ms", 15000)) / 1000
     try:
         r = req.post(url, data=xml.encode("utf-8"),
@@ -118,18 +115,18 @@ def call_tally(xml: str):
         return {"ok": False, "error": str(e)}
 
 def get_tally_companies():
-    xml = """<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>EXPORT</TALLYREQUEST>
-    <TYPE>COLLECTION</TYPE><ID>List of Companies</ID></HEADER>
-    <BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>
-    </DESC></BODY></ENVELOPE>"""
+    xml = ("<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>EXPORT</TALLYREQUEST>"
+           "<TYPE>COLLECTION</TYPE><ID>List of Companies</ID></HEADER>"
+           "<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>"
+           "</STATICVARIABLES></DESC></BODY></ENVELOPE>")
     return call_tally(xml)
 
-# ── Page Routes ────────────────────────────────────────────────────────────────
+# -- Page Routes -------------------------------------------------------------
 @app.route("/")
 def index():
     return render_template("index.html")
 
-# ── Config API ─────────────────────────────────────────────────────────────────
+# -- Config API --------------------------------------------------------------
 @app.route("/api/config", methods=["GET"])
 def get_config():
     return jsonify(load_cfg())
@@ -142,237 +139,246 @@ def post_config():
     except Exception as e:
         return jsonify({"ok": False, "message": str(e)}), 500
 
-# ── Dashboard API ──────────────────────────────────────────────────────────────
+# -- Dashboard API -----------------------------------------------------------
 @app.route("/api/dashboard/status")
 def dashboard_status():
     cfg = load_cfg()
-    # Check SATHI reachability
-    sathi_ok = False
+    sathi_ok  = False
     sathi_msg = "Not configured"
     if cfg.get("api_key"):
         try:
-            r = req.get(cfg.get("base_url", SATHI_BASE).replace("/billing",""), timeout=5)
-            sathi_ok = r.status_code < 500
+            r = req.get(cfg.get("base_url", SATHI_BASE).replace("/billing", ""), timeout=5)
+            sathi_ok  = r.status_code < 500
             sathi_msg = "Success" if sathi_ok else f"HTTP {r.status_code}"
         except Exception:
             sathi_msg = "Unreachable"
 
-    # Check Tally
     tally_result = call_tally("<ENVELOPE><HEADER><VERSION>1</VERSION></HEADER></ENVELOPE>")
-    tally_ok = tally_result.get("ok", False)
+    tally_ok     = tally_result.get("ok", False)
 
     return jsonify({
-        "sathi": {"ok": sathi_ok, "message": sathi_msg},
-        "tally": {"ok": tally_ok, "message": "Connected" if tally_ok else tally_result.get("error","Offline")},
+        "sathi":   {"ok": sathi_ok,  "message": sathi_msg},
+        "tally":   {"ok": tally_ok,  "message": "Connected" if tally_ok else tally_result.get("error", "Offline")},
         "licence": cfg.get("client_id", "Not set"),
         "company": cfg.get("selected_company", "Not set"),
-        "tally_sno": cfg.get("tally_sno", "—"),
+        "tally_sno": cfg.get("tally_sno", "---"),
     })
 
-# ── SATHI → Tally: Fetch Orders ────────────────────────────────────────────────
+# -- SATHI -> Tally ----------------------------------------------------------
 @app.route("/api/fetch-orders", methods=["POST"])
 def fetch_orders():
     cfg  = load_cfg()
-    body = {"ownerCode": cfg.get("owner_code",""), "stateCode": cfg.get("state_code","27")}
+    body = {"ownerCode": cfg.get("owner_code", ""), "stateCode": cfg.get("state_code", "27")}
     return jsonify(call_sathi("getOrderDetailsByBuyerCode", body))
 
-# ── SATHI → Tally: Pull Lot Details ───────────────────────────────────────────
 @app.route("/api/pull-lot", methods=["POST"])
 def pull_lot():
     cfg  = load_cfg()
     data = request.get_json(force=True) or {}
-    body = {
-        "voucherNumber": data.get("voucherNumber",""),
-        "ownerCode":     cfg.get("owner_code",""),
-        "stateCode":     cfg.get("state_code","27"),
-        "locationCode":  cfg.get("location_code",""),
-    }
+    body = {"voucherNumber": data.get("voucherNumber", ""),
+            "ownerCode":     cfg.get("owner_code", ""),
+            "stateCode":     cfg.get("state_code", "27"),
+            "locationCode":  cfg.get("location_code", "")}
     return jsonify(call_sathi("pullLotDetailsByBuyerCode", body))
 
-# ── SATHI → Tally: Fetch Lot (read-only) ──────────────────────────────────────
 @app.route("/api/fetch-lot", methods=["POST"])
 def fetch_lot():
     cfg  = load_cfg()
     data = request.get_json(force=True) or {}
-    body = {
-        "voucherNumber": data.get("voucherNumber",""),
-        "ownerCode":     cfg.get("owner_code",""),
-        "stateCode":     cfg.get("state_code","27"),
-        "locationCode":  cfg.get("location_code",""),
-    }
+    body = {"voucherNumber": data.get("voucherNumber", ""),
+            "ownerCode":     cfg.get("owner_code", ""),
+            "stateCode":     cfg.get("state_code", "27"),
+            "locationCode":  cfg.get("location_code", "")}
     return jsonify(call_sathi("fetchLotDetailsByBuyerCode", body))
 
-# ── Tally → SATHI: Create Order ───────────────────────────────────────────────
+# -- Tally -> SATHI ----------------------------------------------------------
 @app.route("/api/create-order", methods=["POST"])
 def create_order():
     cfg  = load_cfg()
     data = request.get_json(force=True) or {}
     body = {
-        "ownerCode":         cfg.get("owner_code",""),
-        "locationCode":      cfg.get("location_code",""),
-        "stateCode":         cfg.get("state_code","27"),
-        "sellerRole":        data.get("sellerRole","DEALER"),
-        "isRetailSell":      data.get("isRetailSell","N"),
-        "buyerRole":         data.get("buyerRole","DEALER"),
-        "buyerCode":         data.get("buyerCode",""),
-        "saleType":          data.get("saleType","NORMAL"),
-        "selfTransfer":      data.get("selfTransfer","N"),
-        "discountType":      data.get("discountType", None),
-        "discount":          data.get("discount", None),
-        "spaCode":           data.get("spaCode", None),
-        "lotTypeStockDetails": data.get("lotTypeStockDetails",[]),
-        "villageName":       data.get("villageName",""),
-        "buyerStateCode":    data.get("buyerStateCode", cfg.get("state_code","27")),
-        "schemeId":          data.get("schemeId", None),
-        "schemeName":        data.get("schemeName", None),
-        "sector":            data.get("sector", None),
-        "phoneNumber":       data.get("phoneNumber",""),
-        "userName":          data.get("userName",""),
-        "stateName":         data.get("stateName",""),
-        "blockCode":         data.get("blockCode",""),
-        "districtCode":      data.get("districtCode",""),
-        "villageCode":       data.get("villageCode",""),
-        "blockName":         data.get("blockName",""),
-        "districtName":      data.get("districtName",""),
+        "ownerCode":           cfg.get("owner_code", ""),
+        "locationCode":        cfg.get("location_code", ""),
+        "stateCode":           cfg.get("state_code", "27"),
+        "sellerRole":          data.get("sellerRole", "DEALER"),
+        "isRetailSell":        data.get("isRetailSell", "N"),
+        "buyerRole":           data.get("buyerRole", "DEALER"),
+        "buyerCode":           data.get("buyerCode", ""),
+        "saleType":            data.get("saleType", "NORMAL"),
+        "selfTransfer":        data.get("selfTransfer", "N"),
+        "lotTypeStockDetails": data.get("lotTypeStockDetails", []),
+        "villageName":         data.get("villageName", ""),
+        "buyerStateCode":      data.get("buyerStateCode", cfg.get("state_code", "27")),
+        "phoneNumber":         data.get("phoneNumber", ""),
+        "userName":            data.get("userName", ""),
     }
     return jsonify(call_sathi("createSathiOrder", body))
 
-# ── Cancel Voucher ─────────────────────────────────────────────────────────────
 @app.route("/api/cancel-voucher", methods=["POST"])
 def cancel_voucher():
     cfg  = load_cfg()
     data = request.get_json(force=True) or {}
-    body = {
-        "voucherNumber": data.get("voucherNumber",""),
-        "ownerCode":     cfg.get("owner_code",""),
-        "stateCode":     cfg.get("state_code","27"),
-        "locationCode":  cfg.get("location_code",""),
-    }
+    body = {"voucherNumber": data.get("voucherNumber", ""),
+            "ownerCode":     cfg.get("owner_code", ""),
+            "stateCode":     cfg.get("state_code", "27"),
+            "locationCode":  cfg.get("location_code", "")}
     return jsonify(call_sathi("cancelVoucherByBuyerCode", body))
 
-# ── Tally: Get Companies ───────────────────────────────────────────────────────
+# -- Tally -------------------------------------------------------------------
 @app.route("/api/tally/companies")
 def tally_companies():
     return jsonify(get_tally_companies())
 
-# ── Tally: Test Connection ─────────────────────────────────────────────────────
 @app.route("/api/tally/test")
 def tally_test():
-    result = call_tally("<ENVELOPE><HEADER><VERSION>1</VERSION></HEADER></ENVELOPE>")
-    return jsonify(result)
+    return jsonify(call_tally("<ENVELOPE><HEADER><VERSION>1</VERSION></HEADER></ENVELOPE>"))
 
-# ── Reports ────────────────────────────────────────────────────────────────────
+# -- Reports -----------------------------------------------------------------
 @app.route("/api/reports", methods=["POST"])
 def reports():
-    # Returns combined stats from config + any cached data
     cfg = load_cfg()
-    return jsonify({
-        "ok": True,
-        "active_licence": cfg.get("client_id","—"),
-        "received_from_sathi": 0,
-        "sent_to_sathi": 0,
-        "rows": []
-    })
+    return jsonify({"ok": True, "active_licence": cfg.get("client_id", "---"),
+                    "received_from_sathi": 0, "sent_to_sathi": 0, "rows": []})
 
-# ── Health ─────────────────────────────────────────────────────────────────────
+# -- Health ------------------------------------------------------------------
 @app.route("/api/health")
 def health():
     return jsonify({"status": "UP", "ts": int(time.time())})
 
-# ── TDL Download ───────────────────────────────────────────────────────────────
+# -- TDL Download ------------------------------------------------------------
 @app.route("/api/download-tdl")
 def download_tdl():
     cfg   = load_cfg()
-    port  = cfg.get("port", 5000)
-    base  = f"http://localhost:{port}"
-    owner = cfg.get("owner_code","YOUR_OWNER_CODE")
-    state = cfg.get("state_code","27")
-    loc   = cfg.get("location_code","YOUR_LOCATION_CODE")
+    railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+    if railway_domain:
+        base = "https://" + railway_domain
+    else:
+        port = cfg.get("port", 5000)
+        base = "http://localhost:" + str(port)
 
-    tdl = f""";; ╔══════════════════════════════════════════════════════════╗
-;; ║   Sathi-Connect TDL — Generated by Degitalservice       ║
-;; ║   Middleware: {base:<44}║
-;; ╚══════════════════════════════════════════════════════════╝
-;;
-;; Load in Tally: F12 → Product & Features → TDL Management
+    owner = cfg.get("owner_code",    "YOUR_OWNER_CODE")
+    state = cfg.get("state_code",    "27")
+    loc   = cfg.get("location_code", "YOUR_LOCATION_CODE")
 
-[Function: SathiGetOrders]
-    Variable: vURL : String : "{base}/api/fetch-orders"
-    Variable: vBody : String : |{{"ownerCode":"{owner}","stateCode":"{state}"}}|
-    Variable: vResp : String
-    Set: vResp = $$HTTPPost:vURL:vBody
-    Log: vResp
-
-[Function: SathiPullLot]
-    Variable: vURL : String : "{base}/api/pull-lot"
-    Variable: vVoucher : String : $VoucherNumber
-    Variable: vBody : String
-    Set: vBody = |{{"voucherNumber":"| + vVoucher + |","stateCode":"{state}","locationCode":"{loc}"}}|
-    Variable: vResp : String
-    Set: vResp = $$HTTPPost:vURL:vBody
-    Log: vResp
-
-[Function: SathiCreateOrder]
-    Variable: vURL : String : "{base}/api/create-order"
-    Variable: vBody : String : |{{"ownerCode":"{owner}","stateCode":"{state}","locationCode":"{loc}","sellerRole":"DEALER","isRetailSell":"N","buyerRole":"DEALER","saleType":"NORMAL","selfTransfer":"N","lotTypeStockDetails":[]}}|
-    Variable: vResp : String
-    Set: vResp = $$HTTPPost:vURL:vBody
-    Log: vResp
-
-[Function: SathiCancelVoucher]
-    Variable: vURL : String : "{base}/api/cancel-voucher"
-    Variable: vVoucher : String : $VoucherNumber
-    Variable: vBody : String
-    Set: vBody = |{{"voucherNumber":"| + vVoucher + |","stateCode":"{state}","locationCode":"{loc}"}}|
-    Variable: vResp : String
-    Set: vResp = $$HTTPPost:vURL:vBody
-    Log: vResp
-
-[Button: SATHI Fetch Orders]
-    Title: "Fetch SATHI Orders"
-    Action: Call: SathiGetOrders
-    Key: Alt+F
-
-[Button: SATHI Pull Lot]
-    Title: "Pull Lot Details"
-    Action: Call: SathiPullLot
-    Key: Alt+P
-
-[Button: SATHI Create Order]
-    Title: "Create SATHI Order"
-    Action: Call: SathiCreateOrder
-    Key: Alt+C
-
-[Button: SATHI Cancel Voucher]
-    Title: "Cancel SATHI Voucher"
-    Action: Call: SathiCancelVoucher
-    Key: Alt+X
-
-[Menu: SATHI Integration]
-    Add: Item: "Fetch SATHI Orders"   : Call: SathiGetOrders
-    Add: Item: "Pull Lot Details"     : Call: SathiPullLot
-    Add: Item: "Create SATHI Order"   : Call: SathiCreateOrder
-    Add: Item: "Cancel Voucher"       : Call: SathiCancelVoucher
-
-[System: Formula]
-    Add: Menu Item: "SATHI Integration" : "SATHI Integration"
-"""
-    from flask import Response
+    lines = [
+        ";; ==========================================================",
+        ";; Sathi-Connect TDL File - Generated by Degitalservice",
+        ";; Middleware URL : " + base,
+        ";; Owner Code     : " + owner,
+        ";; State Code     : " + state,
+        ";; Location Code  : " + loc,
+        ";; ==========================================================",
+        ";;",
+        ";; HOW TO LOAD IN TALLY PRIME:",
+        ";; 1. Open Tally Prime",
+        ";; 2. Press F12 -> Product & Features -> TDL Management",
+        ";; 3. Set 'Load TDL files on Startup' = YES",
+        ";; 4. Add this file path and press Enter",
+        ";; 5. Restart Tally Prime",
+        ";;",
+        ";; IMPORTANT: Sathi-Connect must be RUNNING before use.",
+        ";; ==========================================================",
+        "",
+        "[Function: SathiGetOrders]",
+        "    Variable  : vURL     : String",
+        "    Variable  : vBody    : String",
+        "    Variable  : vResp    : String",
+        '    00 : Set  : vURL     : "' + base + '/api/fetch-orders"',
+        '    10 : Set  : vBody    : |{"ownerCode":"' + owner + '","stateCode":"' + state + '"}|',
+        "    20 : Set  : vResp    : $$HttpPost:vURL:vBody",
+        "    30 : Log Message     : @@vResp",
+        "",
+        "[Function: SathiPullLot]",
+        "    Parameter : pVoucher : String",
+        "    Variable  : vURL     : String",
+        "    Variable  : vBody    : String",
+        "    Variable  : vResp    : String",
+        '    00 : Set  : vURL     : "' + base + '/api/pull-lot"',
+        '    10 : Set  : vBody    : |{"voucherNumber":"| + @@pVoucher + |","stateCode":"' + state + '","locationCode":"' + loc + '"}|',
+        "    20 : Set  : vResp    : $$HttpPost:vURL:vBody",
+        "    30 : Log Message     : @@vResp",
+        "",
+        "[Function: SathiFetchLot]",
+        "    Parameter : pVoucher : String",
+        "    Variable  : vURL     : String",
+        "    Variable  : vBody    : String",
+        "    Variable  : vResp    : String",
+        '    00 : Set  : vURL     : "' + base + '/api/fetch-lot"',
+        '    10 : Set  : vBody    : |{"voucherNumber":"| + @@pVoucher + |","stateCode":"' + state + '","locationCode":"' + loc + '"}|',
+        "    20 : Set  : vResp    : $$HttpPost:vURL:vBody",
+        "    30 : Log Message     : @@vResp",
+        "",
+        "[Function: SathiCreateOrder]",
+        "    Variable  : vURL     : String",
+        "    Variable  : vBody    : String",
+        "    Variable  : vResp    : String",
+        '    00 : Set  : vURL     : "' + base + '/api/create-order"',
+        '    10 : Set  : vBody    : |{"ownerCode":"' + owner + '","locationCode":"' + loc + '","stateCode":"' + state + '","sellerRole":"DEALER","isRetailSell":"N","buyerRole":"DEALER","saleType":"NORMAL","selfTransfer":"N","lotTypeStockDetails":[]}|',
+        "    20 : Set  : vResp    : $$HttpPost:vURL:vBody",
+        "    30 : Log Message     : @@vResp",
+        "",
+        "[Function: SathiCancelVoucher]",
+        "    Parameter : pVoucher : String",
+        "    Variable  : vURL     : String",
+        "    Variable  : vBody    : String",
+        "    Variable  : vResp    : String",
+        '    00 : Set  : vURL     : "' + base + '/api/cancel-voucher"',
+        '    10 : Set  : vBody    : |{"voucherNumber":"| + @@pVoucher + |","stateCode":"' + state + '","locationCode":"' + loc + '"}|',
+        "    20 : Set  : vResp    : $$HttpPost:vURL:vBody",
+        "    30 : Log Message     : @@vResp",
+        "",
+        "[Button: SATHI Fetch Orders]",
+        '    Title   : "Fetch SATHI Orders"',
+        "    Action  : Call : SathiGetOrders",
+        "    Key     : Alt+F",
+        "",
+        "[Button: SATHI Pull Lot]",
+        '    Title   : "Pull Lot Details"',
+        "    Action  : Call : SathiPullLot : $VoucherNumber",
+        "    Key     : Alt+P",
+        "",
+        "[Button: SATHI Fetch Lot]",
+        '    Title   : "Fetch Lot Details"',
+        "    Action  : Call : SathiFetchLot : $VoucherNumber",
+        "    Key     : Alt+L",
+        "",
+        "[Button: SATHI Create Order]",
+        '    Title   : "Create SATHI Order"',
+        "    Action  : Call : SathiCreateOrder",
+        "    Key     : Alt+C",
+        "",
+        "[Button: SATHI Cancel Voucher]",
+        '    Title   : "Cancel Voucher"',
+        "    Action  : Call : SathiCancelVoucher : $VoucherNumber",
+        "    Key     : Alt+X",
+        "",
+        "[Menu: SATHI Integration]",
+        '    Add : Item : "Fetch SATHI Orders"   : Call : SathiGetOrders',
+        '    Add : Item : "Pull Lot Details"     : Call : SathiPullLot    : $VoucherNumber',
+        '    Add : Item : "Fetch Lot Details"    : Call : SathiFetchLot   : $VoucherNumber',
+        '    Add : Item : "Create SATHI Order"   : Call : SathiCreateOrder',
+        '    Add : Item : "Cancel Voucher"       : Call : SathiCancelVoucher : $VoucherNumber',
+        "",
+        "[System: Formula]",
+        '    Add : Menu Item : "SATHI Integration" : "SATHI Integration"',
+        "",
+    ]
+    tdl = "\n".join(lines)
     return Response(
         tdl,
         mimetype="text/plain",
         headers={"Content-Disposition": "attachment; filename=sathi_integration.tdl"}
     )
 
-# ── Launch ─────────────────────────────────────────────────────────────────────
+# -- Launch ------------------------------------------------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", load_cfg().get("port", 5000)))
+    port    = int(os.environ.get("PORT", load_cfg().get("port", 5000)))
     is_local = not os.environ.get("RAILWAY_ENVIRONMENT")
-    url = f"http://localhost:{port}"
-    print(f"\n  +--------------------------------------+")
-    print(f"  |   Sathi-Connect by Degitalservice    |")
-    print(f"  |   Running at: {url:<22}|")
-    print(f"  +--------------------------------------+\n")
+    url      = "http://localhost:" + str(port)
+    print("\n  +--------------------------------------+")
+    print("  |   Sathi-Connect by Degitalservice    |")
+    print("  |   Running at: " + url + "   |")
+    print("  +--------------------------------------+\n")
     if is_local:
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
     app.run(host="0.0.0.0", port=port, debug=False)
